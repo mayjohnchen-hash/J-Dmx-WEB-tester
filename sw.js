@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dmx-tester-v1';
+const CACHE_NAME = 'dmx-tester-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

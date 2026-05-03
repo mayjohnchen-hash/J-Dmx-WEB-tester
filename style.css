@@ -385,6 +385,8 @@ input[type=range]::-webkit-slider-thumb:active {
     justify-content: space-between;
     align-items: center;
     width: 100%;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .ma2-import-row {
@@ -394,6 +396,7 @@ input[type=range]::-webkit-slider-thumb:active {
     width: 100%;
     padding-top: 0.8rem;
     border-top: 1px dashed var(--border-color);
+    flex-wrap: wrap;
 }
 
 .btn-secondary {
