@@ -95,15 +95,23 @@
         <!-- FIXTURE PAGE -->
         <div id="page-fixture" class="page">
             <div class="fixture-header">
-                <div class="fixture-selector-wrap">
-                    <label>燈具型號 (Fixture):</label>
-                    <select id="fixtureSelect" class="fixture-select">
-                        <!-- Javascript will populate this from fixtures.js -->
-                    </select>
+                <div class="fixture-config-row">
+                    <div class="fixture-selector-wrap">
+                        <label>燈具型號 (Fixture):</label>
+                        <select id="fixtureSelect" class="fixture-select">
+                            <!-- Javascript will populate this from fixtures.js -->
+                        </select>
+                    </div>
+                    <div class="addr-config">
+                        <label>Start Addr (起始位址):</label>
+                        <input type="number" id="fixtureStartAddr" min="1" max="490" value="1">
+                    </div>
                 </div>
-                <div class="addr-config">
-                    <label>Start Addr (起始位址):</label>
-                    <input type="number" id="fixtureStartAddr" min="1" max="490" value="1">
+                <div class="ma2-import-row">
+                    <input type="file" id="ma2XmlInput" accept=".xml" style="display:none">
+                    <button id="btnImportMa2" class="btn btn-secondary btn-sm">匯入 MA2 XML</button>
+                    <label class="cache-label"><input type="checkbox" id="chkSaveMa2" checked> 儲存至快取</label>
+                    <button id="btnClearMa2Cache" class="btn btn-outline-danger btn-sm" style="display: none;">清除快取</button>
                 </div>
             </div>
 

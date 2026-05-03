@@ -292,8 +292,234 @@ function renderFixtureControls(fixtureKey) {
     }
 }
 
+// ----------------------------------------------------
+// MA2 XML Import Logic
+// ----------------------------------------------------
+const ma2XmlInput = document.getElementById('ma2XmlInput');
+const btnImportMa2 = document.getElementById('btnImportMa2');
+const chkSaveMa2 = document.getElementById('chkSaveMa2');
+const btnClearMa2Cache = document.getElementById('btnClearMa2Cache');
+
+if (btnImportMa2 && ma2XmlInput) {
+    btnImportMa2.addEventListener('click', () => {
+        ma2XmlInput.click();
+    });
+
+    ma2XmlInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const xmlString = ev.target.result;
+            try {
+                const profile = parseMA2XML(xmlString, file.name.replace('.xml', ''));
+                if (profile && profile.groups.length > 0) {
+                    const key = 'ma2_' + Date.now();
+                    FIXTURE_PROFILES[key] = profile;
+                    
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = profile.name;
+                    fixtureSelect.appendChild(option);
+                    
+                    fixtureSelect.value = key;
+                    currentFixtureKey = key;
+                    renderFixtureControls(key);
+                    
+                    if (chkSaveMa2.checked) {
+                        saveFixturesToCache();
+                    }
+                    alert(`成功匯入燈庫: ${profile.name}`);
+                } else {
+                    alert("無法解析此檔案或找不到通道設定。");
+                }
+            } catch (err) {
+                console.error("XML Parsing Error", err);
+                alert("解析 XML 失敗，格式可能不支援。");
+            }
+        };
+        reader.readAsText(file);
+        ma2XmlInput.value = '';
+    });
+}
+
+if (btnClearMa2Cache) {
+    btnClearMa2Cache.addEventListener('click', () => {
+        if (confirm("確定要清除所有已儲存的 MA2 燈庫嗎？")) {
+            localStorage.removeItem('ma2_cached_fixtures');
+            location.reload();
+        }
+    });
+}
+
+function saveFixturesToCache() {
+    const customFixtures = {};
+    for (const key in FIXTURE_PROFILES) {
+        if (key.startsWith('ma2_')) {
+            const copy = JSON.parse(JSON.stringify(FIXTURE_PROFILES[key]));
+            customFixtures[key] = copy;
+        }
+    }
+    localStorage.setItem('ma2_cached_fixtures', JSON.stringify(customFixtures));
+    updateClearCacheButton();
+}
+
+function loadFixturesFromCache() {
+    try {
+        const cached = localStorage.getItem('ma2_cached_fixtures');
+        if (cached) {
+            const customFixtures = JSON.parse(cached);
+            let hasCache = false;
+            for (const key in customFixtures) {
+                const profile = customFixtures[key];
+                // Macros are no longer needed for blackout
+                profile.macros = [];
+                FIXTURE_PROFILES[key] = profile;
+                hasCache = true;
+            }
+            if(hasCache && chkSaveMa2) {
+                chkSaveMa2.checked = true;
+            }
+        }
+    } catch(e) {
+        console.error("Failed to load cached fixtures", e);
+    }
+    updateClearCacheButton();
+}
+
+function updateClearCacheButton() {
+    if (!btnClearMa2Cache) return;
+    const cached = localStorage.getItem('ma2_cached_fixtures');
+    if (cached && Object.keys(JSON.parse(cached)).length > 0) {
+        btnClearMa2Cache.style.display = 'inline-block';
+    } else {
+        btnClearMa2Cache.style.display = 'none';
+    }
+}
+
+function parseMA2XML(xmlString, baseName) {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+    
+    if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
+        throw new Error("Invalid XML");
+    }
+
+    const profile = {
+        name: baseName + " (MA2 Import)",
+        channelCount: 0,
+        dimmerChannel: 1,
+        groups: [],
+        macros: []
+    };
+
+    const channels = [];
+
+    const addChannel = (chStr, attrStr) => {
+        const ch = parseInt(chStr, 10);
+        if (!isNaN(ch) && ch > 0) {
+            channels.push({ ch, label: attrStr, attribute: attrStr.toLowerCase() });
+            if (ch > profile.channelCount) profile.channelCount = ch;
+        }
+    };
+
+    // Extract Coarse, Fine, DMX, or Offset allocations
+    const allElems = xmlDoc.getElementsByTagName("*");
+    for (let i = 0; i < allElems.length; i++) {
+        const el = allElems[i];
+        let ch = null;
+        let chFine = null;
+        let attrName = null;
+
+        // Iterate through all attributes to be case-insensitive and format-agnostic
+        for (let j = 0; j < el.attributes.length; j++) {
+            const attr = el.attributes[j];
+            const name = attr.name.toLowerCase();
+            const val = attr.value;
+
+            if (name === "coarse" || name === "dmx") ch = val;
+            if (name === "fine") chFine = val;
+            if (name === "offset") {
+                const parts = val.split(",");
+                if (parts.length > 0) ch = parts[0];
+                if (parts.length > 1) chFine = parts[1];
+            }
+            if (name === "attribute" || name === "name" || name === "logicalchannel") {
+                attrName = val;
+            }
+        }
+
+        if (ch || chFine) {
+            if (!attrName) {
+                if (el.parentElement) {
+                    attrName = el.parentElement.getAttribute("Attribute") || el.parentElement.getAttribute("Name");
+                }
+                attrName = attrName || el.tagName;
+            }
+
+            if (ch && ch !== "None") addChannel(ch, attrName);
+            if (chFine && chFine !== "None") addChannel(chFine, attrName + " Fine");
+        }
+    }
+    
+    // De-duplicate and Sort channels
+    const uniqueChannelsMap = new Map();
+    channels.forEach(c => uniqueChannelsMap.set(c.ch, c));
+    const uniqueChannels = Array.from(uniqueChannelsMap.values()).sort((a, b) => a.ch - b.ch);
+
+    const posGroup = { name: "Position (位置)", sliders: [] };
+    const colorGroup = { name: "Color (顏色)", isColor: true, sliders: [] };
+    const beamGroup = { name: "Optics & Beam (光學/光束)", sliders: [] };
+    const goboGroup = { name: "Gobo (圖案)", sliders: [] };
+    const shutterGroup = { name: "Shutter & Strobe (快門/頻閃)", sliders: [] };
+    const otherGroup = { name: "Features (其他)", sliders: [] };
+
+    uniqueChannels.forEach(c => {
+        const attr = c.attribute;
+        const sliderDef = { ch: c.ch, label: c.label, default: 0 };
+
+        if (attr.includes("dimmer") || attr.includes("intensity")) {
+            // Master dimmer is handled globally, don't show in grid
+            profile.dimmerChannel = c.ch;
+        } else if (attr.includes("strobe") || attr.includes("shutter")) {
+            shutterGroup.sliders.push(sliderDef);
+        } else if (attr.includes("pan") || attr.includes("tilt")) {
+            if (!attr.includes("fine")) sliderDef.default = 128;
+            posGroup.sliders.push(sliderDef);
+        } else if (attr.includes("colorrgb") || attr.includes("red") || attr.includes("green") || attr.includes("blue") || attr.includes("white") || attr.includes("cyan") || attr.includes("magenta") || attr.includes("yellow") || attr.includes("cto") || attr.includes("ctb")) {
+            if (attr.includes("red") || attr.includes("magenta")) sliderDef.cssClass = "c-red";
+            if (attr.includes("green") || attr.includes("yellow")) sliderDef.cssClass = "c-green";
+            if (attr.includes("blue") || attr.includes("cyan")) sliderDef.cssClass = "c-blue";
+            if (attr.includes("white")) sliderDef.cssClass = "c-white";
+            colorGroup.sliders.push(sliderDef);
+        } else if (attr.includes("zoom") || attr.includes("focus") || attr.includes("iris") || attr.includes("frost") || attr.includes("prism") || attr.includes("blade") || attr.includes("frame")) {
+            beamGroup.sliders.push(sliderDef);
+        } else if (attr.includes("gobo") || attr.includes("wheel")) {
+            goboGroup.sliders.push(sliderDef);
+        } else {
+            otherGroup.sliders.push(sliderDef);
+        }
+    });
+
+    if (posGroup.sliders.length > 0) profile.groups.push(posGroup);
+    if (colorGroup.sliders.length > 0) profile.groups.push(colorGroup);
+    if (beamGroup.sliders.length > 0) profile.groups.push(beamGroup);
+    if (goboGroup.sliders.length > 0) profile.groups.push(goboGroup);
+    if (shutterGroup.sliders.length > 0) profile.groups.push(shutterGroup);
+    if (otherGroup.sliders.length > 0) profile.groups.push(otherGroup);
+
+    // Removed the default Blackout macro since Master controls it.
+
+    return profile;
+}
+
+
 // Initial setup
 function initFixtures() {
+    // Clear first to prevent duplicates if re-init
+    fixtureSelect.innerHTML = '';
+    
     for (const key in FIXTURE_PROFILES) {
         const option = document.createElement('option');
         option.value = key;
@@ -301,16 +527,37 @@ function initFixtures() {
         fixtureSelect.appendChild(option);
     }
     
-    fixtureSelect.value = currentFixtureKey;
-    renderFixtureControls(currentFixtureKey);
+    // Prefer last selected or first available
+    if (currentFixtureKey && FIXTURE_PROFILES[currentFixtureKey]) {
+        fixtureSelect.value = currentFixtureKey;
+    } else {
+        const keys = Object.keys(FIXTURE_PROFILES);
+        if (keys.length > 0) {
+            currentFixtureKey = keys[0];
+            fixtureSelect.value = currentFixtureKey;
+        } else {
+            currentFixtureKey = null;
+        }
+    }
     
-    fixtureSelect.addEventListener('change', (e) => {
-        currentFixtureKey = e.target.value;
+    if (currentFixtureKey) {
         renderFixtureControls(currentFixtureKey);
-    });
+    } else {
+        fixtureControlsGrid.innerHTML = '<div class="empty-state" style="padding: 2rem; text-align: center; color: var(--text-secondary);">請點擊上方 [匯入 MA2 XML] 選擇燈庫檔案以開始操作。</div>';
+    }
+    
+    // Bind change listener only once
+    if (!fixtureSelect.hasAttribute('data-bound')) {
+        fixtureSelect.addEventListener('change', (e) => {
+            currentFixtureKey = e.target.value;
+            renderFixtureControls(currentFixtureKey);
+        });
+        fixtureSelect.setAttribute('data-bound', 'true');
+    }
 }
 
 // Call on load
+loadFixturesFromCache();
 initFixtures();
 
 // ----------------------------------------------------
