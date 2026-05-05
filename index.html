@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>J DMX Tester</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#2563eb">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').then(reg => {
+            console.log('ServiceWorker registered:', reg.scope);
+          }).catch(err => {
+            console.log('ServiceWorker registration failed:', err);
+          });
+        });
+      }
+    </script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-content">
+            <h1>DMX Controller</h1>
+            <button id="connectBtn" class="btn btn-primary">Connect BLE</button>
+        </div>
+        <div class="status-bar">
+            <span id="connectionStatus" class="status disconnected">Disconnected</span>
+        </div>
+        <div class="master-controls">
+            <div class="master-row">
+                <label>Master Dimmer</label>
+                <input type="range" id="masterSlider" min="0" max="255" value="255" class="fader">
+            </div>
+            <button id="blackoutBtn" class="btn btn-danger">BLACKOUT</button>
+        </div>
+        
+        <!-- Top Navigation Tabs -->
+        <nav class="top-tabs">
+            <div class="nav-item active" data-target="page-general">
+                <span class="nav-icon">⌨️</span>
+                <span class="nav-label">傳統燈具 (General)</span>
+            </div>
+            <div class="nav-item" data-target="page-fixture">
+                <span class="nav-icon">💡</span>
+                <span class="nav-label">電腦燈具 (Fixtures)</span>
+            </div>
+        </nav>
+    </header>
+
+    <main class="main-content">
+        <!-- GENERAL PAGE -->
+        <div id="page-general" class="page active">
+            <div class="console-container">
+                <div class="lcd-display">
+                    <div id="lcdScreen" class="lcd-screen">_</div>
+                    <div id="lcdHint" class="lcd-hint">e.g., 1 THRU 10 @ 255</div>
+                </div>
+                
+                <div class="keypad">
+                    <button class="key num-key" data-val="7">7</button>
+                    <button class="key num-key" data-val="8">8</button>
+                    <button class="key num-key" data-val="9">9</button>
+                    <button class="key cmd-key cmd-clear" data-val="C">CLEAR</button>
+                    
+                    <button class="key num-key" data-val="4">4</button>
+                    <button class="key num-key" data-val="5">5</button>
+                    <button class="key num-key" data-val="6">6</button>
+                    <button class="key cmd-key cmd-thru" data-val="THRU">THRU</button>
+
+                    <button class="key num-key" data-val="1">1</button>
+                    <button class="key num-key" data-val="2">2</button>
+                    <button class="key num-key" data-val="3">3</button>
+                    <button class="key cmd-key cmd-at" data-val="@">@</button>
+                    
+                    <button class="key cmd-key highlight" data-val="FULL">FULL</button>
+                    <button class="key num-key" data-val="0">0</button>
+                    <button class="key enter-key" data-val="ENTER">ENTER</button>
+                </div>
+            </div>
+
+            <div class="active-section">
+                <h2 class="section-title">Active Channels</h2>
+                <div id="activeChannelsGrid" class="active-channels-grid">
+                    <!-- Javascript will generate active channels here -->
+                    <div class="empty-state">No Active Channels</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FIXTURE PAGE -->
+        <div id="page-fixture" class="page">
+            <div class="fixture-header">
+                <div class="fixture-config-row">
+                    <div class="fixture-selector-wrap">
+                        <label>燈具型號 (Fixture):</label>
+                        <select id="fixtureSelect" class="fixture-select">
+                            <!-- Javascript will populate this from fixtures.js -->
+                        </select>
+                    </div>
+                    <div class="addr-config">
+                        <label>Start Addr (起始位址):</label>
+                        <input type="number" id="fixtureStartAddr" min="1" max="490" value="1">
+                    </div>
+                </div>
+                <div class="ma2-import-row">
+                    <input type="file" id="ma2XmlInput" accept=".xml" style="display:none">
+                    <button id="btnImportMa2" class="btn btn-secondary btn-sm">匯入 MA2 XML</button>
+                    <label class="cache-label"><input type="checkbox" id="chkSaveMa2" checked> 儲存至快取</label>
+                    <button id="btnClearMa2Cache" class="btn btn-outline-danger btn-sm" style="display: none;">清除快取</button>
+                </div>
+            </div>
+
+            <div id="fixtureControlsGrid" class="fixture-controls-grid">
+                <!-- Javascript will generate sliders and macro buttons here based on selected fixture -->
+            </div>
+        </div>
+    </main>
+
+
+    <script src="fixtures.js"></script>
+
+    <script src="app.js"></script>
+</body>
+</html>
