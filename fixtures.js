@@ -1,1 +1,0 @@
-const FIXTURE_PROFILES = {};
