@@ -28,8 +28,55 @@ let inputBuffer = "";
 const navItems = document.querySelectorAll('.nav-item');
 const pages = document.querySelectorAll('.page');
 
+function clearAllDmxSignals() {
+    for (let i = 1; i <= 512; i++) {
+        if (localChannels[i] > 0) {
+            localChannels[i] = 0;
+            sendDmxCommand(i, 0);
+        }
+    }
+    
+    // Clear General Page Buffer
+    inputBuffer = "";
+    updateDisplay();
+    
+    // Reset Master Slider
+    masterSlider.value = 0;
+    if (blackoutState) {
+        blackoutState = false;
+        blackoutBtn.textContent = 'BLACKOUT';
+        blackoutBtn.classList.replace('btn-danger', 'btn-primary');
+    }
+    
+    // Reset Fixture Sliders to Default (without sending)
+    const sliders = document.querySelectorAll('.fx-slider');
+    sliders.forEach(slider => {
+        const profile = FIXTURE_PROFILES[currentFixtureKey];
+        const ch = parseInt(slider.getAttribute('data-ch'), 10);
+        let defaultVal = 0;
+        if (profile && profile.groups) {
+            for (let g of profile.groups) {
+                const s = g.sliders.find(x => x.ch === ch);
+                if (s && s.default !== undefined) {
+                    defaultVal = s.default;
+                    break;
+                }
+            }
+        }
+        slider.value = defaultVal;
+        if (slider.nextElementSibling && slider.nextElementSibling.classList.contains('val-display')) {
+            slider.nextElementSibling.textContent = defaultVal;
+        }
+    });
+
+    renderActiveChannels();
+}
+
 navItems.forEach(item => {
     item.addEventListener('click', () => {
+        // Clear all sent signals when switching pages
+        clearAllDmxSignals();
+
         // Remove active class from all nav items and pages
         navItems.forEach(n => n.classList.remove('active'));
         pages.forEach(p => p.classList.remove('active'));
@@ -141,7 +188,6 @@ function renderActiveChannels() {
 // ----------------------------------------------------
 // Master Controls
 // ----------------------------------------------------
-let currentDimmerChannel = 8; // dynamically updated based on active fixture
 
 masterSlider.addEventListener('input', (e) => {
     if (blackoutState) {
@@ -149,7 +195,8 @@ masterSlider.addEventListener('input', (e) => {
         blackoutBtn.textContent = 'BLACKOUT';
         blackoutBtn.classList.replace('btn-primary', 'btn-danger');
     }
-    setFixtureChannel(currentDimmerChannel, e.target.value); 
+    // Channel 0 can be used by ESP32 as a global brightness multiplier if supported
+    sendDmxCommand(0, e.target.value); 
 });
 
 blackoutBtn.addEventListener('click', () => {
@@ -159,12 +206,24 @@ blackoutBtn.addEventListener('click', () => {
         masterSlider.value = 0;
         blackoutBtn.textContent = 'RESTORE';
         blackoutBtn.classList.replace('btn-danger', 'btn-primary');
-        setFixtureChannel(currentDimmerChannel, 0);
+        // Actually clear all channels for conventional blackout
+        for (let i = 1; i <= 512; i++) {
+            if (localChannels[i] > 0) {
+                sendDmxCommand(i, 0);
+            }
+        }
+        sendDmxCommand(0, 0);
     } else {
         masterSlider.value = previousMasterValue;
         blackoutBtn.textContent = 'BLACKOUT';
         blackoutBtn.classList.replace('btn-primary', 'btn-danger');
-        setFixtureChannel(currentDimmerChannel, previousMasterValue);
+        // Restore active channels
+        for (let i = 1; i <= 512; i++) {
+            if (localChannels[i] > 0) {
+                sendDmxCommand(i, localChannels[i]);
+            }
+        }
+        sendDmxCommand(0, previousMasterValue);
     }
 });
 
@@ -207,6 +266,13 @@ function renderFixtureControls(fixtureKey) {
     if (!profile) return;
     
     currentDimmerChannel = profile.dimmerChannel;
+    
+    // Ensure "Dimmer" group is always rendered first
+    const dimmerGroupIndex = profile.groups.findIndex(g => g.name.toLowerCase().includes('dimmer'));
+    if (dimmerGroupIndex > 0) {
+        const dimmerGroup = profile.groups.splice(dimmerGroupIndex, 1)[0];
+        profile.groups.unshift(dimmerGroup);
+    }
     
     profile.groups.forEach(group => {
         const groupDiv = document.createElement('div');
@@ -468,6 +534,7 @@ function parseMA2XML(xmlString, baseName) {
     channels.forEach(c => uniqueChannelsMap.set(c.ch, c));
     const uniqueChannels = Array.from(uniqueChannelsMap.values()).sort((a, b) => a.ch - b.ch);
 
+    const dimmerGroup = { name: "Dimmer (亮度)", sliders: [] };
     const posGroup = { name: "Position (位置)", sliders: [] };
     const colorGroup = { name: "Color (顏色)", isColor: true, sliders: [] };
     const beamGroup = { name: "Optics & Beam (光學/光束)", sliders: [] };
@@ -479,9 +546,10 @@ function parseMA2XML(xmlString, baseName) {
         const attr = c.attribute;
         const sliderDef = { ch: c.ch, label: c.label, default: 0 };
 
-        if (attr.includes("dimmer") || attr.includes("intensity")) {
-            // Master dimmer is handled globally, don't show in grid
+        if (attr.includes("dim") || attr.includes("intensity")) {
             profile.dimmerChannel = c.ch;
+            if (!attr.includes("fine")) sliderDef.default = 255;
+            dimmerGroup.sliders.push(sliderDef);
         } else if (attr.includes("strobe") || attr.includes("shutter")) {
             shutterGroup.sliders.push(sliderDef);
         } else if (attr.includes("pan") || attr.includes("tilt")) {
@@ -502,6 +570,7 @@ function parseMA2XML(xmlString, baseName) {
         }
     });
 
+    if (dimmerGroup.sliders.length > 0) profile.groups.push(dimmerGroup);
     if (posGroup.sliders.length > 0) profile.groups.push(posGroup);
     if (colorGroup.sliders.length > 0) profile.groups.push(colorGroup);
     if (beamGroup.sliders.length > 0) profile.groups.push(beamGroup);
@@ -549,6 +618,7 @@ function initFixtures() {
     // Bind change listener only once
     if (!fixtureSelect.hasAttribute('data-bound')) {
         fixtureSelect.addEventListener('change', (e) => {
+            clearAllDmxSignals(); // Clear signals when switching fixtures
             currentFixtureKey = e.target.value;
             renderFixtureControls(currentFixtureKey);
         });
@@ -572,7 +642,8 @@ connectBtn.addEventListener('click', async () => {
     try {
         console.log('Requesting Bluetooth Device...');
         bleDevice = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'J DMX tester' }],
+            // Accept any device to avoid name prefix mismatch after firmware updates
+                        filters: [{ namePrefix: 'J DMX tester' }],
             optionalServices: [SERVICE_UUID]
         });
 
@@ -591,8 +662,9 @@ connectBtn.addEventListener('click', async () => {
         updateUI();
         console.log('Connected!');
 
-        // Send master initialization
-        setFixtureChannel(currentDimmerChannel, masterSlider.value);
+        // Backward compatibility: Send channel 0 = 255 to unlock output on older ESP32 firmwares 
+        // that still use channel 0 as a global master dimmer multiplier.
+        sendDmxCommand(0, 255);
 
     } catch (error) {
         console.error('Connection failed!', error);
