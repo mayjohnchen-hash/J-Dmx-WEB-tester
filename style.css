@@ -332,6 +332,46 @@ input[type=range]::-webkit-slider-thumb:active {
     background: #059669;
 }
 
+/* Quick Tools */
+.quick-tools {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.tool-btn {
+    background: #334155;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.8rem;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tool-btn:hover {
+    background: #475569;
+}
+
+.tool-btn:active {
+    transform: translateY(2px);
+}
+
+.effect-btn {
+    background: #4f46e5;
+}
+
+.effect-btn:hover {
+    background: #6366f1;
+}
+
+.effect-btn.active-effect {
+    background: #ec4899;
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.6);
+}
+
 /* Active Channels Section */
 .active-section {
     background: var(--surface-color);

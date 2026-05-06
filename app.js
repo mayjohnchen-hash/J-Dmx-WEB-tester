@@ -91,6 +91,12 @@ navItems.forEach(item => {
 // ----------------------------------------------------
 // NumPad Logic (General Page)
 // ----------------------------------------------------
+let lastSelectedChannel = 1;
+let lastSelectedValue = 255;
+
+let clearClickCount = 0;
+let clearClickTimer = null;
+
 keys.forEach(key => {
     key.addEventListener('click', () => {
         const val = key.dataset.val;
@@ -98,6 +104,19 @@ keys.forEach(key => {
         if (val === 'C') {
             inputBuffer = "";
             lcdHint.textContent = "Cleared";
+            
+            clearClickCount++;
+            if (clearClickCount >= 3) {
+                clearAllDmxSignals();
+                lcdHint.textContent = "All Outputs Cleared";
+                clearClickCount = 0;
+            }
+            
+            if (clearClickTimer) clearTimeout(clearClickTimer);
+            clearClickTimer = setTimeout(() => {
+                clearClickCount = 0;
+            }, 600);
+            
         } else if (val === 'ENTER') {
             processCommand(inputBuffer);
             inputBuffer = ""; // clear after enter
@@ -158,6 +177,8 @@ function processCommand(cmd) {
         targets.forEach(ch => {
             localChannels[ch] = value;
             sendDmxCommand(ch, value);
+            lastSelectedChannel = ch;
+            lastSelectedValue = value;
         });
         
         renderActiveChannels();
@@ -183,6 +204,125 @@ function renderActiveChannels() {
     if (!hasActive) {
         activeChannelsGrid.innerHTML = '<div class="empty-state">No Active Channels</div>';
     }
+}
+
+// ----------------------------------------------------
+// Quick Tools (Prev/Next/Effects)
+// ----------------------------------------------------
+const btnPrevCh = document.getElementById('btnPrevCh');
+const btnNextCh = document.getElementById('btnNextCh');
+const btnAllBlink = document.getElementById('btnAllBlink');
+const btnChase = document.getElementById('btnChase');
+
+let activeEffectInterval = null;
+let effectState = false;
+let chaseIndex = 1;
+
+function stopEffects() {
+    if (activeEffectInterval) {
+        clearInterval(activeEffectInterval);
+        activeEffectInterval = null;
+    }
+    if(btnAllBlink) btnAllBlink.classList.remove('active-effect');
+    if(btnChase) btnChase.classList.remove('active-effect');
+}
+
+if(btnPrevCh) {
+    btnPrevCh.addEventListener('click', () => {
+        stopEffects();
+        localChannels[lastSelectedChannel] = 0;
+        sendDmxCommand(lastSelectedChannel, 0);
+        
+        lastSelectedChannel--;
+        if (lastSelectedChannel < 1) lastSelectedChannel = 512;
+        
+        localChannels[lastSelectedChannel] = lastSelectedValue;
+        sendDmxCommand(lastSelectedChannel, lastSelectedValue);
+        
+        lcdHint.textContent = `Moved to CH ${lastSelectedChannel}`;
+        renderActiveChannels();
+    });
+}
+
+if(btnNextCh) {
+    btnNextCh.addEventListener('click', () => {
+        stopEffects();
+        localChannels[lastSelectedChannel] = 0;
+        sendDmxCommand(lastSelectedChannel, 0);
+        
+        lastSelectedChannel++;
+        if (lastSelectedChannel > 512) lastSelectedChannel = 1;
+        
+        localChannels[lastSelectedChannel] = lastSelectedValue;
+        sendDmxCommand(lastSelectedChannel, lastSelectedValue);
+        
+        lcdHint.textContent = `Moved to CH ${lastSelectedChannel}`;
+        renderActiveChannels();
+    });
+}
+
+if(btnAllBlink) {
+    btnAllBlink.addEventListener('click', () => {
+        if (btnAllBlink.classList.contains('active-effect')) {
+            stopEffects();
+            clearAllDmxSignals();
+            return;
+        }
+        
+        stopEffects();
+        clearAllDmxSignals();
+        btnAllBlink.classList.add('active-effect');
+        
+        let sweepIndex = 1;
+        
+        activeEffectInterval = setInterval(() => {
+            // Turn ON the front of the snake
+            localChannels[sweepIndex] = 255;
+            sendDmxCommand(sweepIndex, 255);
+            
+            // Turn OFF the tail of the snake (5 channels behind)
+            let tailIndex = sweepIndex - 5;
+            if (tailIndex < 1) tailIndex += 512; // wrap around
+            
+            localChannels[tailIndex] = 0;
+            sendDmxCommand(tailIndex, 0);
+            
+            sweepIndex++;
+            if (sweepIndex > 512) sweepIndex = 1;
+            
+            renderActiveChannels();
+        }, 80); // Move forward every 80ms
+    });
+}
+
+if(btnChase) {
+    btnChase.addEventListener('click', () => {
+        if (btnChase.classList.contains('active-effect')) {
+            stopEffects();
+            clearAllDmxSignals();
+            return;
+        }
+        
+        stopEffects();
+        clearAllDmxSignals();
+        btnChase.classList.add('active-effect');
+        
+        chaseIndex = 1;
+        activeEffectInterval = setInterval(() => {
+            let prev = chaseIndex - 1;
+            if (prev < 1) prev = 512;
+            localChannels[prev] = 0;
+            sendDmxCommand(prev, 0);
+            
+            localChannels[chaseIndex] = 255;
+            sendDmxCommand(chaseIndex, 255);
+            
+            renderActiveChannels();
+            
+            chaseIndex++;
+            if (chaseIndex > 512) chaseIndex = 1;
+        }, 200); // 200ms per step for a slower chase
+    });
 }
 
 // ----------------------------------------------------
