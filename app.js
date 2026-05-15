@@ -846,8 +846,24 @@ let remoteEditMode = false;
 // Default configuration
 let remoteConfig = {
     pages: Array(32).fill(""),
-    buttons: Array(512).fill("")
+    channels: Array(512).fill(null).map(() => ({
+        name: "",
+        type: "button",
+        mode: "toggle"
+    }))
 };
+
+// Modal Elements
+const remoteEditModal = document.getElementById('remoteEditModal');
+const editModalCh = document.getElementById('editModalCh');
+const editModalName = document.getElementById('editModalName');
+const editModalType = document.getElementById('editModalType');
+const editModalModeContainer = document.getElementById('editModalModeContainer');
+const editModalMode = document.getElementById('editModalMode');
+const btnEditModalCancel = document.getElementById('btnEditModalCancel');
+const btnEditModalSave = document.getElementById('btnEditModalSave');
+
+let currentEditingCh = null;
 
 // Load from localStorage
 function loadRemoteConfig() {
@@ -855,8 +871,17 @@ function loadRemoteConfig() {
         const saved = localStorage.getItem('dmx_remote_config');
         if (saved) {
             const parsed = JSON.parse(saved);
-            if (parsed.pages && parsed.buttons) {
-                remoteConfig = parsed;
+            if (parsed.pages) remoteConfig.pages = parsed.pages;
+            
+            if (parsed.channels) {
+                remoteConfig.channels = parsed.channels;
+            } else if (parsed.buttons) {
+                // Migrate from older version
+                remoteConfig.channels = parsed.buttons.map(name => ({
+                    name: name || "",
+                    type: "button",
+                    mode: "toggle"
+                }));
             }
         }
     } catch (e) {
@@ -892,51 +917,159 @@ function renderRemoteButtons() {
     
     for (let i = 0; i < 16; i++) {
         const ch = startCh + i;
-        const btn = document.createElement('div');
-        btn.className = 'remote-btn';
-        if (localChannels[ch] > 0) {
-            btn.classList.add('active-ch');
-        }
-        if (remoteEditMode) {
-            btn.classList.add('edit-mode');
-        }
+        const config = remoteConfig.channels[ch - 1] || { name: "", type: "button", mode: "toggle" };
         
-        const chLabel = document.createElement('span');
-        chLabel.className = 'remote-btn-ch';
-        chLabel.textContent = `CH ${ch}`;
-        
-        const nameLabel = document.createElement('span');
-        nameLabel.className = 'remote-btn-name';
-        nameLabel.textContent = remoteConfig.buttons[ch - 1] || '---';
-        
-        btn.appendChild(chLabel);
-        btn.appendChild(nameLabel);
-        
-        btn.addEventListener('click', () => {
+        if (config.type === 'fader') {
+            const container = document.createElement('div');
+            container.className = 'remote-fader-container';
+            if (remoteEditMode) container.classList.add('edit-mode');
+            
+            const chLabel = document.createElement('span');
+            chLabel.className = 'remote-fader-ch';
+            chLabel.textContent = `CH ${ch}`;
+            
+            const valLabel = document.createElement('span');
+            valLabel.className = 'remote-fader-val';
+            valLabel.textContent = localChannels[ch] || 0;
+            
+            const input = document.createElement('input');
+            input.type = 'range';
+            input.className = 'remote-fader-input';
+            input.min = 0;
+            input.max = 255;
+            input.value = localChannels[ch] || 0;
+            input.setAttribute('orient', 'vertical');
+            
+            const nameLabel = document.createElement('span');
+            nameLabel.className = 'remote-fader-name';
+            nameLabel.textContent = config.name || '---';
+            
             if (remoteEditMode) {
-                const newName = prompt(`請輸入 CH ${ch} 的按鈕名稱 (清空則刪除)：`, remoteConfig.buttons[ch - 1]);
-                if (newName !== null) {
-                    remoteConfig.buttons[ch - 1] = newName.trim();
-                    saveRemoteConfig();
-                    renderRemoteButtons();
-                }
+                input.disabled = true;
+                container.addEventListener('click', () => openEditModal(ch));
             } else {
-                // Toggle logic
-                if (localChannels[ch] > 0) {
-                    localChannels[ch] = 0;
-                    sendDmxCommand(ch, 0);
-                    btn.classList.remove('active-ch');
-                } else {
-                    localChannels[ch] = 255;
-                    sendDmxCommand(ch, 255);
-                    btn.classList.add('active-ch');
-                }
-                renderActiveChannels();
+                input.addEventListener('input', (e) => {
+                    const val = parseInt(e.target.value, 10);
+                    valLabel.textContent = val;
+                    localChannels[ch] = val;
+                    sendDmxCommand(ch, val);
+                    renderActiveChannels();
+                });
             }
-        });
-        
-        remoteButtonsGrid.appendChild(btn);
+            
+            container.appendChild(chLabel);
+            container.appendChild(valLabel);
+            container.appendChild(input);
+            container.appendChild(nameLabel);
+            remoteButtonsGrid.appendChild(container);
+            
+        } else {
+            // Button Type
+            const btn = document.createElement('div');
+            btn.className = 'remote-btn';
+            if (localChannels[ch] > 0) {
+                btn.classList.add('active-ch');
+            }
+            if (remoteEditMode) {
+                btn.classList.add('edit-mode');
+            }
+            
+            const chLabel = document.createElement('span');
+            chLabel.className = 'remote-btn-ch';
+            chLabel.textContent = `CH ${ch}`;
+            
+            const nameLabel = document.createElement('span');
+            nameLabel.className = 'remote-btn-name';
+            nameLabel.textContent = config.name || '---';
+            
+            btn.appendChild(chLabel);
+            btn.appendChild(nameLabel);
+            
+            if (remoteEditMode) {
+                btn.addEventListener('click', () => openEditModal(ch));
+            } else {
+                if (config.mode === 'flash') {
+                    const pressHandler = (e) => {
+                        e.preventDefault();
+                        if (localChannels[ch] === 255) return;
+                        localChannels[ch] = 255;
+                        sendDmxCommand(ch, 255);
+                        btn.classList.add('active-ch');
+                        renderActiveChannels();
+                    };
+                    const releaseHandler = (e) => {
+                        e.preventDefault();
+                        if (localChannels[ch] === 0) return;
+                        localChannels[ch] = 0;
+                        sendDmxCommand(ch, 0);
+                        btn.classList.remove('active-ch');
+                        renderActiveChannels();
+                    };
+                    btn.addEventListener('mousedown', pressHandler);
+                    btn.addEventListener('touchstart', pressHandler, { passive: false });
+                    btn.addEventListener('mouseup', releaseHandler);
+                    btn.addEventListener('mouseleave', releaseHandler);
+                    btn.addEventListener('touchend', releaseHandler);
+                } else {
+                    btn.addEventListener('click', () => {
+                        if (localChannels[ch] > 0) {
+                            localChannels[ch] = 0;
+                            sendDmxCommand(ch, 0);
+                            btn.classList.remove('active-ch');
+                        } else {
+                            localChannels[ch] = 255;
+                            sendDmxCommand(ch, 255);
+                            btn.classList.add('active-ch');
+                        }
+                        renderActiveChannels();
+                    });
+                }
+            }
+            remoteButtonsGrid.appendChild(btn);
+        }
     }
+}
+
+// Modal Logic
+function openEditModal(ch) {
+    currentEditingCh = ch;
+    const config = remoteConfig.channels[ch - 1];
+    editModalCh.textContent = ch;
+    editModalName.value = config.name || "";
+    editModalType.value = config.type || "button";
+    editModalMode.value = config.mode || "toggle";
+    
+    editModalModeContainer.style.display = (editModalType.value === 'button') ? 'flex' : 'none';
+    remoteEditModal.style.display = 'flex';
+}
+
+function closeEditModal() {
+    if (remoteEditModal) remoteEditModal.style.display = 'none';
+    currentEditingCh = null;
+}
+
+if (editModalType) {
+    editModalType.addEventListener('change', () => {
+        editModalModeContainer.style.display = (editModalType.value === 'button') ? 'flex' : 'none';
+    });
+}
+
+if (btnEditModalCancel) {
+    btnEditModalCancel.addEventListener('click', closeEditModal);
+}
+
+if (btnEditModalSave) {
+    btnEditModalSave.addEventListener('click', () => {
+        if (currentEditingCh) {
+            const config = remoteConfig.channels[currentEditingCh - 1];
+            config.name = editModalName.value.trim();
+            config.type = editModalType.value;
+            config.mode = editModalMode.value;
+            saveRemoteConfig();
+            renderRemoteButtons();
+        }
+        closeEditModal();
+    });
 }
 
 if (btnPrevRemotePage) {

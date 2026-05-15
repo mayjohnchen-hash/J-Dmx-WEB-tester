@@ -148,6 +148,39 @@
                 <!-- Javascript will generate 16 buttons here -->
             </div>
         </div>
+
+        <!-- REMOTE EDIT MODAL -->
+        <div id="remoteEditModal" class="modal-overlay" style="display: none;">
+            <div class="modal-content">
+                <h3>編輯通道 <span id="editModalCh"></span></h3>
+                <div class="modal-body">
+                    <div class="modal-form-group">
+                        <label>自訂名稱:</label>
+                        <input type="text" id="editModalName" class="modal-input" placeholder="留空則顯示預設">
+                    </div>
+                    
+                    <div class="modal-form-group">
+                        <label>控制類型:</label>
+                        <select id="editModalType" class="modal-input">
+                            <option value="button">按鈕 (Button)</option>
+                            <option value="fader">推桿 (Fader)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="modal-form-group" id="editModalModeContainer">
+                        <label>按鈕模式:</label>
+                        <select id="editModalMode" class="modal-input">
+                            <option value="toggle">切換 (Toggle) - 點擊開關</option>
+                            <option value="flash">點亮 (Flash) - 按住開，放開關</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button id="btnEditModalCancel" class="btn btn-secondary">取消</button>
+                    <button id="btnEditModalSave" class="btn btn-primary">儲存</button>
+                </div>
+            </div>
+        </div>
     </main>
 
 
