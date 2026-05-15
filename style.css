@@ -26,7 +26,7 @@ body {
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
-    padding-top: 240px; /* Space for the sticky header with tabs */
+    padding-top: 200px; /* Space for the sticky header with tabs */
     padding-bottom: 20px; /* Space for bottom nav removed */
 }
 
@@ -127,30 +127,7 @@ h1 {
     box-shadow: 0 0 8px var(--success-color);
 }
 
-.master-controls {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: var(--glass-blur);
-    border: 1px solid var(--border-color);
-    padding: 0.8rem;
-    border-radius: 12px;
-    box-shadow: inset 0 2px 15px rgba(0, 0, 0, 0.3);
-}
 
-.master-row {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-.master-row label {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
 
 input[type=range] {
     -webkit-appearance: none;
@@ -679,4 +656,183 @@ input[type=range]::-webkit-slider-thumb:active {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
+}
+
+/* Remote Page Styles */
+.remote-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface-color);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.remote-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.remote-page-selector {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.remote-page-selector select {
+    background: #0f172a;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: white;
+    padding: 0.5rem;
+    font-size: 1rem;
+    max-width: 150px;
+}
+
+.remote-edit-mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.edit-mode-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider.round {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #334155;
+    transition: .4s;
+    border-radius: 24px;
+}
+
+.slider.round:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider.round {
+    background-color: var(--danger-color);
+}
+
+input:checked + .slider.round:before {
+    transform: translateX(22px);
+}
+
+/* Remote Grid */
+.remote-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.remote-btn {
+    aspect-ratio: 1 / 1;
+    background: #1e293b;
+    border: 2px solid #334155;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 5px;
+    cursor: pointer;
+    transition: all 0.1s;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.remote-btn:active:not(.edit-mode) {
+    transform: scale(0.95);
+}
+
+.remote-btn.active-ch {
+    background: var(--primary-color);
+    border-color: #60a5fa;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+}
+
+.remote-btn-ch {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    position: absolute;
+    top: 5px;
+    left: 5px;
+}
+
+.remote-btn.active-ch .remote-btn-ch {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.remote-btn-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-align: center;
+    color: var(--text-primary);
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+/* Edit Mode styling */
+.remote-btn.edit-mode {
+    border-style: dashed;
+    border-color: var(--danger-color);
+    animation: shake 0.5s infinite;
+}
+
+@keyframes shake {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(-1deg); }
+    50% { transform: rotate(0deg); }
+    75% { transform: rotate(1deg); }
+    100% { transform: rotate(0deg); }
+}
+
+.remote-btn.edit-mode:after {
+    content: "✏️";
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    font-size: 1rem;
+    opacity: 0.7;
 }

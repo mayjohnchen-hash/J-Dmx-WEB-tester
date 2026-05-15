@@ -31,13 +31,7 @@
         <div class="status-bar">
             <span id="connectionStatus" class="status disconnected">Disconnected</span>
         </div>
-        <div class="master-controls">
-            <div class="master-row">
-                <label>Master Dimmer</label>
-                <input type="range" id="masterSlider" min="0" max="255" value="255" class="fader">
-            </div>
-            <button id="blackoutBtn" class="btn btn-danger">BLACKOUT</button>
-        </div>
+
         
         <!-- Top Navigation Tabs -->
         <nav class="top-tabs">
@@ -48,6 +42,10 @@
             <div class="nav-item" data-target="page-fixture">
                 <span class="nav-icon">💡</span>
                 <span class="nav-label">電腦燈具 (Fixtures)</span>
+            </div>
+            <div class="nav-item" data-target="page-remote">
+                <span class="nav-icon">🎛️</span>
+                <span class="nav-label">DMX Remote</span>
             </div>
         </nav>
     </header>
@@ -124,6 +122,30 @@
 
             <div id="fixtureControlsGrid" class="fixture-controls-grid">
                 <!-- Javascript will generate sliders and macro buttons here based on selected fixture -->
+            </div>
+        </div>
+
+        <!-- REMOTE PAGE -->
+        <div id="page-remote" class="page">
+            <div class="remote-header">
+                <div class="remote-pagination">
+                    <button id="btnPrevRemotePage" class="btn btn-secondary">&lt;</button>
+                    <div class="remote-page-selector">
+                        <select id="remotePageSelect"></select>
+                        <button id="btnEditRemotePage" class="btn btn-outline-secondary btn-sm" title="Edit Page Name">✏️</button>
+                    </div>
+                    <button id="btnNextRemotePage" class="btn btn-secondary">&gt;</button>
+                </div>
+                <div class="remote-edit-mode-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="remoteEditModeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="edit-mode-label">編輯模式 (Edit Mode)</span>
+                </div>
+            </div>
+            <div id="remoteButtonsGrid" class="remote-grid">
+                <!-- Javascript will generate 16 buttons here -->
             </div>
         </div>
     </main>

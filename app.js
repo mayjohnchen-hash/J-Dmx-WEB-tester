@@ -13,11 +13,6 @@ const lcdScreen = document.getElementById('lcdScreen');
 const lcdHint = document.getElementById('lcdHint');
 const keys = document.querySelectorAll('.key');
 const activeChannelsGrid = document.getElementById('activeChannelsGrid');
-const masterSlider = document.getElementById('masterSlider');
-const blackoutBtn = document.getElementById('blackoutBtn');
-
-let blackoutState = false;
-let previousMasterValue = 255;
 
 let localChannels = new Array(513).fill(0);
 let inputBuffer = "";
@@ -39,14 +34,6 @@ function clearAllDmxSignals() {
     // Clear General Page Buffer
     inputBuffer = "";
     updateDisplay();
-    
-    // Reset Master Slider
-    masterSlider.value = 0;
-    if (blackoutState) {
-        blackoutState = false;
-        blackoutBtn.textContent = 'BLACKOUT';
-        blackoutBtn.classList.replace('btn-danger', 'btn-primary');
-    }
     
     // Reset Fixture Sliders to Default (without sending)
     const sliders = document.querySelectorAll('.fx-slider');
@@ -70,6 +57,11 @@ function clearAllDmxSignals() {
     });
 
     renderActiveChannels();
+    
+    // Update remote page if it exists
+    if (typeof renderRemoteButtons === 'function') {
+        renderRemoteButtons();
+    }
 }
 
 navItems.forEach(item => {
@@ -324,48 +316,6 @@ if(btnChase) {
         }, 200); // 200ms per step for a slower chase
     });
 }
-
-// ----------------------------------------------------
-// Master Controls
-// ----------------------------------------------------
-
-masterSlider.addEventListener('input', (e) => {
-    if (blackoutState) {
-        blackoutState = false;
-        blackoutBtn.textContent = 'BLACKOUT';
-        blackoutBtn.classList.replace('btn-primary', 'btn-danger');
-    }
-    // Channel 0 can be used by ESP32 as a global brightness multiplier if supported
-    sendDmxCommand(0, e.target.value); 
-});
-
-blackoutBtn.addEventListener('click', () => {
-    blackoutState = !blackoutState;
-    if (blackoutState) {
-        previousMasterValue = masterSlider.value;
-        masterSlider.value = 0;
-        blackoutBtn.textContent = 'RESTORE';
-        blackoutBtn.classList.replace('btn-danger', 'btn-primary');
-        // Actually clear all channels for conventional blackout
-        for (let i = 1; i <= 512; i++) {
-            if (localChannels[i] > 0) {
-                sendDmxCommand(i, 0);
-            }
-        }
-        sendDmxCommand(0, 0);
-    } else {
-        masterSlider.value = previousMasterValue;
-        blackoutBtn.textContent = 'BLACKOUT';
-        blackoutBtn.classList.replace('btn-primary', 'btn-danger');
-        // Restore active channels
-        for (let i = 1; i <= 512; i++) {
-            if (localChannels[i] > 0) {
-                sendDmxCommand(i, localChannels[i]);
-            }
-        }
-        sendDmxCommand(0, previousMasterValue);
-    }
-});
 
 // ----------------------------------------------------
 // Fixture Page Logic (Dynamic Generation)
@@ -879,3 +829,161 @@ async function processQueue() {
         }
     }
 }
+
+// ----------------------------------------------------
+// Remote Page Logic
+// ----------------------------------------------------
+const btnPrevRemotePage = document.getElementById('btnPrevRemotePage');
+const btnNextRemotePage = document.getElementById('btnNextRemotePage');
+const remotePageSelect = document.getElementById('remotePageSelect');
+const btnEditRemotePage = document.getElementById('btnEditRemotePage');
+const remoteEditModeToggle = document.getElementById('remoteEditModeToggle');
+const remoteButtonsGrid = document.getElementById('remoteButtonsGrid');
+
+let remoteCurrentPage = 0; // 0 to 31
+let remoteEditMode = false;
+
+// Default configuration
+let remoteConfig = {
+    pages: Array(32).fill(""),
+    buttons: Array(512).fill("")
+};
+
+// Load from localStorage
+function loadRemoteConfig() {
+    try {
+        const saved = localStorage.getItem('dmx_remote_config');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.pages && parsed.buttons) {
+                remoteConfig = parsed;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load remote config", e);
+    }
+}
+
+function saveRemoteConfig() {
+    localStorage.setItem('dmx_remote_config', JSON.stringify(remoteConfig));
+}
+
+function initRemotePage() {
+    if (!remotePageSelect) return;
+    loadRemoteConfig();
+    
+    // Populate select
+    remotePageSelect.innerHTML = '';
+    for (let i = 0; i < 32; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = remoteConfig.pages[i] ? `[${i+1}] ${remoteConfig.pages[i]}` : `Page ${i + 1}`;
+        remotePageSelect.appendChild(option);
+    }
+    
+    remotePageSelect.value = remoteCurrentPage;
+    renderRemoteButtons();
+}
+
+function renderRemoteButtons() {
+    if (!remoteButtonsGrid) return;
+    remoteButtonsGrid.innerHTML = '';
+    const startCh = remoteCurrentPage * 16 + 1;
+    
+    for (let i = 0; i < 16; i++) {
+        const ch = startCh + i;
+        const btn = document.createElement('div');
+        btn.className = 'remote-btn';
+        if (localChannels[ch] > 0) {
+            btn.classList.add('active-ch');
+        }
+        if (remoteEditMode) {
+            btn.classList.add('edit-mode');
+        }
+        
+        const chLabel = document.createElement('span');
+        chLabel.className = 'remote-btn-ch';
+        chLabel.textContent = `CH ${ch}`;
+        
+        const nameLabel = document.createElement('span');
+        nameLabel.className = 'remote-btn-name';
+        nameLabel.textContent = remoteConfig.buttons[ch - 1] || '---';
+        
+        btn.appendChild(chLabel);
+        btn.appendChild(nameLabel);
+        
+        btn.addEventListener('click', () => {
+            if (remoteEditMode) {
+                const newName = prompt(`請輸入 CH ${ch} 的按鈕名稱 (清空則刪除)：`, remoteConfig.buttons[ch - 1]);
+                if (newName !== null) {
+                    remoteConfig.buttons[ch - 1] = newName.trim();
+                    saveRemoteConfig();
+                    renderRemoteButtons();
+                }
+            } else {
+                // Toggle logic
+                if (localChannels[ch] > 0) {
+                    localChannels[ch] = 0;
+                    sendDmxCommand(ch, 0);
+                    btn.classList.remove('active-ch');
+                } else {
+                    localChannels[ch] = 255;
+                    sendDmxCommand(ch, 255);
+                    btn.classList.add('active-ch');
+                }
+                renderActiveChannels();
+            }
+        });
+        
+        remoteButtonsGrid.appendChild(btn);
+    }
+}
+
+if (btnPrevRemotePage) {
+    btnPrevRemotePage.addEventListener('click', () => {
+        if (remoteCurrentPage > 0) {
+            remoteCurrentPage--;
+            remotePageSelect.value = remoteCurrentPage;
+            renderRemoteButtons();
+        }
+    });
+}
+
+if (btnNextRemotePage) {
+    btnNextRemotePage.addEventListener('click', () => {
+        if (remoteCurrentPage < 31) {
+            remoteCurrentPage++;
+            remotePageSelect.value = remoteCurrentPage;
+            renderRemoteButtons();
+        }
+    });
+}
+
+if (remotePageSelect) {
+    remotePageSelect.addEventListener('change', (e) => {
+        remoteCurrentPage = parseInt(e.target.value, 10);
+        renderRemoteButtons();
+    });
+}
+
+if (btnEditRemotePage) {
+    btnEditRemotePage.addEventListener('click', () => {
+        const currentName = remoteConfig.pages[remoteCurrentPage];
+        const newName = prompt(`請輸入第 ${remoteCurrentPage + 1} 頁的名稱 (清空則刪除)：`, currentName);
+        if (newName !== null) {
+            remoteConfig.pages[remoteCurrentPage] = newName.trim();
+            saveRemoteConfig();
+            initRemotePage(); // re-populate select
+        }
+    });
+}
+
+if (remoteEditModeToggle) {
+    remoteEditModeToggle.addEventListener('change', (e) => {
+        remoteEditMode = e.target.checked;
+        renderRemoteButtons();
+    });
+}
+
+// Initial call
+initRemotePage();
