@@ -754,7 +754,13 @@ connectBtn.addEventListener('click', async () => {
 
         // Backward compatibility: Send channel 0 = 255 to unlock output on older ESP32 firmwares 
         // that still use channel 0 as a global master dimmer multiplier.
-        sendDmxCommand(0, 255);
+        // Adding a short delay because sending immediately after characteristic discovery can cause drops.
+        setTimeout(() => {
+            if (isConnected) {
+                sendDmxCommand(0, 255);
+                console.log('Sent master channel (0) to 255');
+            }
+        }, 400);
 
     } catch (error) {
         console.error('Connection failed!', error);
@@ -811,21 +817,27 @@ async function processQueue() {
     if (isSending || commandQueue.length === 0) return;
     isSending = true;
 
+    let data;
     try {
-        if (commandQueue.length > 20) {
-           commandQueue = commandQueue.slice(commandQueue.length - 10);
+        // Prevent huge queues but allow enough for full 512 channel clears
+        if (commandQueue.length > 1000) {
+           commandQueue = commandQueue.slice(commandQueue.length - 512);
         }
 
-        const data = commandQueue.shift();
+        data = commandQueue.shift();
         await dmxCharacteristic.writeValueWithoutResponse(data);
         
     } catch (error) {
         console.error('Send error:', error);
+        // If GATT is busy, put the packet back to retry
+        if (data && error.message && (error.message.includes('in progress') || error.message.includes('busy'))) {
+            commandQueue.unshift(data);
+        }
     } finally {
         isSending = false;
         // Proceed next
         if (commandQueue.length > 0) {
-            setTimeout(processQueue, 5); // small delay to prevent crashing ESP32
+            setTimeout(processQueue, 15); // 15ms is safer for BLE connection intervals
         }
     }
 }
